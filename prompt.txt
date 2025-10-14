@@ -1,0 +1,13 @@
+Hi! I have to build a prototype for a computer forensics project. It has to be able to present a software the can be used in a forensics lab.
+
+I want the below to be the key components.
+
+1. I need to be able to have an admin. Only an admin can view all cases evidences and details.
+2. I need to be able to assign cases to various members. The person assigned the case will be the enquiring officer of a case. He can add invite other members as team members.
+3. The admin has to be able to add cases and case details and upload all the digital evidences available for the case. 
+4. The enquiring officer of a case or only the team members of the particular case must be able to access the digital evidence of the cases
+5. An enquiring officer or a normal team member can be part of multiple teams and he / she must be able to access all the evidences of the cases they are a part of. Others shouldn't be able to.
+6. As and when an evidence is accessed by a person in the case, I want to record the access or the operation performed by the user in the DB pertaining to when and which case and which evidence was accessed by the user.
+
+Can you build me a prototype for the above requirements. Use python for API and use streamlit for the UI.
+Use local db and json files to store data for now and use sqlite or sqlalchemy. Make it simple and just give me a minimalistic prototype for the above requirements. Help me create the required tables and databases locally. Normalise all the tables and declare appropriate primary keys for each table and help me access these through a minimalistic streamlit application which can help me login as an admin or a user and display the various cases and teams I am part of and various digital evidence available for the particular cases.
