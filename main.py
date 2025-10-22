@@ -876,6 +876,34 @@ from groq import Groq
 from dotenv import load_dotenv
 import pytsk3
 import subprocess
+import winreg
+import codecs
+import sqlite3
+import glob
+from datetime import timedelta
+try:
+    import win32crypt
+except ImportError:
+    win32crypt = None
+import re
+import base64
+import io
+import mimetypes
+import zipfile
+from collections import defaultdict, Counter
+try:
+    from scapy.all import rdpcap, TCP, Raw, IP, IPv6
+    SCAPY_AVAILABLE = True
+except ImportError:
+    SCAPY_AVAILABLE = False
+import mimetypes
+try:
+    from PIL import Image
+    from PIL.ExifTags import TAGS
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -1355,6 +1383,89 @@ def load_chat_history(session, evidence_id, current_user_id):
     
     return chat_history
 
+def create_new_case_ui(session, all_users):
+    """UI for admin to create a new case"""
+    st.subheader("➕ Create New Case")
+    
+    with st.form("create_case_form"):
+        case_title = st.text_input("Case Title*", placeholder="Enter case title")
+        case_description = st.text_area("Case Description", placeholder="Enter case description (optional)")
+        
+        # Dropdown for selecting enquiring officer
+        officer_usernames = [u.username for u in all_users]
+        selected_officer = st.selectbox("Enquiring Officer*", officer_usernames, index=0)
+        
+        # File uploader for evidence
+        evidence_files = st.file_uploader(
+            "Upload Evidence Files", 
+            accept_multiple_files=True,
+            help="Upload one or more evidence files for this case"
+        )
+        
+        submit_button = st.form_submit_button("Create Case", type="primary")
+        
+        if submit_button:
+            if not case_title:
+                st.error("❌ Case title is required!")
+                return
+            
+            if not selected_officer:
+                st.error("❌ Please select an enquiring officer!")
+                return
+            
+            # Get the officer user object
+            officer = session.query(User).filter_by(username=selected_officer).first()
+            
+            if not officer:
+                st.error("❌ Selected officer not found!")
+                return
+            
+            # Create the case
+            new_case = Case(
+                title=case_title,
+                description=case_description if case_description else None,
+                enquiring_officer=officer
+            )
+            session.add(new_case)
+            session.commit()
+            
+            # Create evidence directory if it doesn't exist
+            evidence_dir = 'evidences'
+            os.makedirs(evidence_dir, exist_ok=True)
+            
+            # Upload evidence files
+            if evidence_files:
+                for uploaded_file in evidence_files:
+                    # Save file with case prefix
+                    file_path = os.path.join(evidence_dir, f"case_{new_case.id}_{uploaded_file.name}")
+                    
+                    with open(file_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    
+                    # Create metadata
+                    metadata = {
+                        'original_name': uploaded_file.name,
+                        'size': uploaded_file.size,
+                        'type': uploaded_file.type
+                    }
+                    
+                    # Create evidence record
+                    evidence = Evidence(
+                        case_id=new_case.id,
+                        file_name=uploaded_file.name,
+                        file_path=file_path,
+                        evidence_metadata=json.dumps(metadata)
+                    )
+                    session.add(evidence)
+                
+                session.commit()
+                st.success(f"✅ Case '{case_title}' created successfully with {len(evidence_files)} evidence file(s)!")
+            else:
+                st.success(f"✅ Case '{case_title}' created successfully (no evidence files uploaded)!")
+            
+            st.info(f"Case ID: {new_case.id} | Officer: {officer.username}")
+            st.rerun()
+
 # Streamlit UI
 st.title('Computer Forensics Prototype - Chain of Custody System')
 
@@ -1415,10 +1526,15 @@ else:
     
     # Sidebar case selection
     st.sidebar.header("Cases")
-    case_options = ["Select a Case"] + [f"{case.id}: {case.title}" for case in accessible_cases]
+    case_options = ["Select a Case",] + [f"{case.id}: {case.title}" for case in accessible_cases]
+    if is_admin:
+        case_options = ["Create a new case",] + case_options
     selected_case_option = st.sidebar.selectbox("Choose a Case", case_options, key="case_select")
     selected_case = None
-    if selected_case_option != "Select a Case":
+    if selected_case_option ==  "Create a new case":
+        create_new_case_ui(session, session.query(User).all())
+        
+    if selected_case_option not in ["Create a new case", "Select a Case"]:
         case_id = int(selected_case_option.split(":")[0])
         selected_case = session.query(Case).filter_by(id=case_id).first()
     
